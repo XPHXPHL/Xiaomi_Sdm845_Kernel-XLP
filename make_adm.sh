@@ -14,7 +14,7 @@ kernel_name="XLP-Kernel"
 defconfig_path="perseus_defconfig"
 kbuild_build_user="XiaoPoHai"
 kbuild_build_host="Elish"
-support="11,"
+support="11"
 #====================
 
 print (){
@@ -65,7 +65,7 @@ timedatectl set-timezone ${timezone}
 
 print "You are building version:${date}" yellow
 
-clang_path="${HOME}/cbl15/bin"
+clang_path="${HOME}/cbl/bin"
 gcc_path="/usr/bin/aarch64-linux-gnu-"
 gcc_32_path="/usr/bin/arm-linux-gnueabi-"
 
