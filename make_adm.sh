@@ -3,18 +3,18 @@
 #====================
 sourcecheck=0
 logcat=1
-devicecheck=1
+devicecheck=0
 ABdevice=1
-autopack=0
+autopack=1
 #====================
 buildtype=clang
 timezone="Asia/Shanghai"
 build_device="perseus"
-kernel_name="lulu-kernel"
+kernel_name="XLP-Kernel"
 defconfig_path="perseus_defconfig"
-kbuild_build_user="perseus"
-kbuild_build_host="luluz"
-support="11"
+kbuild_build_user="XiaoPoHai"
+kbuild_build_host="Elish"
+support="11,"
 #====================
 
 print (){
@@ -35,10 +35,10 @@ case ${2} in
 }
 
 if [ ${sourcecheck} -eq 1 ];then
-    apt-get update
-    apt-get install -y build-essential bc python curl git zip ftp gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libssl-dev lftp wget libfl-dev 
+   sudo apt-get update
+   sudo apt-get install -y build-essential bc python2 python3 curl git zip ftp gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libssl-dev lftp wget libfl-dev bison flex clang
+   git submodule update --init --recursive 
 fi
-
 
 if [ ${sourcecheck} -eq 1 ];then
     if [ -d "${HOME}/Anykernel3" ];then
@@ -52,9 +52,9 @@ fi
 if [ ${sourcecheck} -eq 1 ];then
     if [ -d "${HOME}/cbl" ];then
         rm -rf ${HOME}/cbl
-        git clone --depth=1 https://github.com/HyperLYP/Clang-and-Binutils-for-ARM64-platforms ${HOME}/cbl
+        git clone --depth=1 https://github.com/kdrag0n/proton-clang ${HOME}/cbl
     else
-        git clone --depth=1 https://github.com/HyperLYP/Clang-and-Binutils-for-ARM64-platforms ${HOME}/cbl
+        git clone --depth=1 https://github.com/kdrag0n/proton-clang ${HOME}/cbl
     fi
 fi
 
@@ -65,7 +65,7 @@ timedatectl set-timezone ${timezone}
 
 print "You are building version:${date}" yellow
 
-clang_path="${HOME}/cbl/bin/"
+clang_path="${HOME}/cbl15/bin"
 gcc_path="/usr/bin/aarch64-linux-gnu-"
 gcc_32_path="/usr/bin/arm-linux-gnueabi-"
 
@@ -84,13 +84,24 @@ else [ ${buildtype} == clang ]
 	    CLANG_TRIPLE=aarch64-linux-gnu- \
 	    CROSS_COMPILE=${gcc_path} \
 	    AR=${clang_path}/llvm-ar \
+        LD=${clang_path}/ld.lld \
 	    NM=${clang_path}/llvm-nm \
 	    OBJCOPY=${clang_path}/llvm-objcopy \
 	    OBJDUMP=${clang_path}/llvm-objdump \
 	    STRIP=${clang_path}/llvm-strip \
-     CROSS_COMPILE_ARM32=${gcc_32_path} "
+        CROSS_COMPILE_ARM32=${gcc_32_path} "
 fi
 
+config_update(){
+    if  [ -d "arch/arm64/configs/vendor/xiaomi" ];then
+        if [ -f "arch/arm64/configs/vendor/output/${build_device}_defconfig" ];then
+            echo -e "\033[32m [INFO] defconfig was definded \033[0m"
+        else
+            ./scripts/update_defconfig ${build_device}
+            echo -e "\033[32m [INFO] Build defconfig successfully \033[0m"
+        fi
+    fi      
+}
 
 building(){
     export KBUILD_BUILD_USER=${kbuild_build_user}
@@ -116,6 +127,8 @@ building(){
 }
 
 building_unclean(){
+    export KBUILD_BUILD_USER=${kbuild_build_user}
+    export KBUILD_BUILD_HOST=${kbuild_build_host}
 	if [ ${logcat} -eq 1 ];then
         make ${args} 2>&1 | tee out/kernel.log
         if [ $? = 0 ];then
@@ -137,32 +150,37 @@ building_unclean(){
 }
 
 zipfile(){
-    zipfiles="${kernel_name}-${date}.zip"
-    cp -f out/arch/arm64/boot/Image.gz-dtb ~/Anykernel3
-    cd ~/Anykernel3
-    sed -i "s|kernel.string=|kernel.string=${kernel_name}|" "anykernel.sh"
-    sed -i "s|do.devicecheck=|do.devicecheck=${devicecheck}|" "anykernel.sh"
-    sed -i "s|device.name1=|device.name1=${build_device}|" "anykernel.sh"
-    sed -i "s|supported.versions=|supported.versions=${support}|" "anykernel.sh"
-    if [ ${ABdevice} -eq 1 ];then
-        sed -i "s|is_slot_device=|is_slot_device=1|" "anykernel.sh"
+    if [ -f "out/arch/arm64/boot/Image" ];then
+        zipfiles="${kernel_name}-${build_device}-${date}.zip"
+        cp -f out/arch/arm64/boot/Image ~/Anykernel3
+        #cp -f out/arch/arm64/boot/dtbo.img ~/Anykernel3
+        cd ~/Anykernel3
+        sed -i "s|kernel.string=|kernel.string=${kernel_name}|" "anykernel.sh"
+        sed -i "s|do.devicecheck=|do.devicecheck=${devicecheck}|" "anykernel.sh"
+        sed -i "s|device.name1=|device.name1=${build_device}|" "anykernel.sh"
+        sed -i "s|supported.versions=|supported.versions=${support}|" "anykernel.sh"
+        if [ ${ABdevice} -eq 1 ];then
+            sed -i "s|is_slot_device=|is_slot_device=1|" "anykernel.sh"
+        else
+            sed -i "s|is_slot_device=|is_slot_device=0|" "anykernel.sh"
+        fi
+        zip -r "${zipfiles}" *
+        mv -f "${zipfiles}" ${HOME}
+        sed -i "s|kernel.string=${kernel_name}|kernel.string=|" "anykernel.sh"
+        sed -i "s|do.devicecheck=${devicecheck}|do.devicecheck=|" "anykernel.sh"
+        sed -i "s|device.name1=${build_device}|device.name1=|" "anykernel.sh"
+        sed -i "s|supported.versions=${support}|supported.versions=|" "anykernel.sh"
+        if [ ${ABdevice} -eq 1 ];then
+            sed -i "s|is_slot_device=1|is_slot_device=|" "anykernel.sh"
+        else
+            sed -i "s|is_slot_device=0|is_slot_device=|" "anykernel.sh"
+        fi
+        cd ${HOME}
+        cd $source
+        print "All done.Find it at ${HOME}/${zipfiles}" green
     else
-        sed -i "s|is_slot_device=|is_slot_device=0|" "anykernel.sh"
+        exit 1
     fi
-    zip -r "${zipfiles}" *
-    mv -f "${zipfiles}" ${HOME}
-    sed -i "s|kernel.string=${kernel_name}|kernel.string=|" "anykernel.sh"
-    sed -i "s|do.devicecheck=${devicecheck}|do.devicecheck=|" "anykernel.sh"
-    sed -i "s|device.name1=${build_device}|device.name1=|" "anykernel.sh"
-    sed -i "s|supported.versions=${support}|supported.versions=|" "anykernel.sh"
-    if [ ${ABdevice} -eq 1 ];then
-        sed -i "s|is_slot_device=1|is_slot_device=|" "anykernel.sh"
-    else
-        sed -i "s|is_slot_device=0|is_slot_device=|" "anykernel.sh"
-    fi
-    cd ${HOME}
-    cd $source
-    print "All done.Find it at ${HOME}/${zipfiles}" green
 }
 
 #if [ -d "${HOME}/cbl" ];then
@@ -175,6 +193,8 @@ if [ -d "out" ];then
         if  [ ${Dev} = y ];then
             if [ ${autopack} -eq 1 ];then
                 rm -rf out
+                rm -rf arch/arm64/configs/vendor/output/*
+                config_update
                 building
                 zipfile
                 END_TIME=`date +%s`
@@ -183,6 +203,8 @@ if [ -d "out" ];then
                 echo "Runtime is: ${EXEC_TIME} min"
             else
                 rm -rf out
+                rm -rf arch/arm64/configs/vendor/output/*
+                config_update
                 building
                 END_TIME=`date +%s`
                 EXEC_TIME=$((${END_TIME} - ${START_TIME}))
@@ -207,6 +229,8 @@ if [ -d "out" ];then
         fi
 else
     if [ ${autopack} -eq 1 ];then
+        rm -rf arch/arm64/configs/vendor/output/*
+        config_update
         building
         zipfile
         END_TIME=`date +%s`
@@ -214,6 +238,8 @@ else
         EXEC_TIME=$((${EXEC_TIME}/60))
         echo "Runtime is: ${EXEC_TIME} min"
     else
+        rm -rf arch/arm64/configs/vendor/output/*
+        config_update
         building
         END_TIME=`date +%s`
         EXEC_TIME=$((${END_TIME} - ${START_TIME}))
